@@ -3,19 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aviator Spribe Real Sound Demo + Admin</title>
+    <title>Aviator Live Game - Pro Edition</title>
     <style>
         body { background: #0b0f19; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 10px; text-align: center; }
         .game-container { background: #151b2b; border-radius: 16px; padding: 15px; max-width: 420px; margin: auto; box-shadow: 0 8px 20px rgba(0,0,0,0.6); border: 1px solid #1e293b; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; color: #94a3b8; }
         
-        /* Game Screen Canvas Area */
         .screen-box { position: relative; height: 210px; background: #07090e; border-radius: 12px; overflow: hidden; border: 1px solid #334155; }
         canvas { display: block; width: 100%; height: 100%; }
         .multiplier-overlay { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); font-size: 44px; font-weight: 900; color: #facc15; text-shadow: 0 0 15px rgba(250, 204, 21, 0.4); pointer-events: none; }
         .status-text { position: absolute; top: 12px; left: 12px; font-size: 13px; font-weight: bold; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; }
 
-        /* Controls */
         .bet-section { margin-top: 15px; background: #1e293b; padding: 12px; border-radius: 10px; }
         .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
         input, button { padding: 12px; font-size: 16px; border-radius: 8px; border: none; outline: none; font-weight: bold; }
@@ -26,30 +24,22 @@
         button:disabled { background: #475569; cursor: not-allowed; opacity: 0.7; }
         
         .wallet-bar { display: flex; justify-content: space-between; font-size: 15px; font-weight: bold; margin-top: 8px; color: #cbd5e1; }
-
-        /* Admin Panel */
-        .admin-panel { margin-top: 20px; background: #090d16; padding: 12px; border-radius: 10px; border: 1px dashed #ef4444; text-align: left; }
-        .admin-panel h3 { margin: 0 0 10px 0; font-size: 15px; color: #f87171; text-align: center; }
-        .admin-group { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
-        .admin-group input, .admin-group select { width: 110px; padding: 6px; font-size: 13px; background: #1e293b; color: #fff; border-radius: 4px; border: 1px solid #334155; }
     </style>
 </head>
-<body>
+<body onclick="unlockAudio()">
 
     <div class="game-container">
         <div class="header">
-            <span>✈️ Aviator Spribe Edition</span>
+            <span>✈️ Aviator Pro</span>
             <span style="color: #22c55e;">● Live</span>
         </div>
         
-        <!-- Game Canvas Screen -->
         <div class="screen-box">
             <div class="status-text" id="gameStatus">Waiting for next round...</div>
             <canvas id="gameCanvas"></canvas>
             <div class="multiplier-overlay" id="multiplierDisplay">1.00x</div>
         </div>
 
-        <!-- Betting Controls -->
         <div class="bet-section">
             <div class="input-group">
                 <input type="number" id="betAmount" placeholder="Amount (₹)" value="50">
@@ -60,31 +50,26 @@
                 <span>Win: ₹<span id="winAmount">0</span></span>
             </div>
         </div>
-
-        <!-- Admin Control Panel -->
-        <div class="admin-panel">
-            <h3>⚙️ Owner / Admin Control</h3>
-            <div class="admin-group">
-                <label>Next Crash Multiplier:</label>
-                <input type="number" id="adminCustomCrash" step="0.1" placeholder="Auto / e.g. 2.0">
-            </div>
-            <div class="admin-group">
-                <label>House Edge Mode:</label>
-                <select id="adminMode">
-                    <option value="smart">Smart House Edge (80% Low Crash)</option>
-                    <option value="instant_crash">Instant Crash (1.00x - Owner Wins)</option>
-                    <option value="jackpot">Force High Jackpot</option>
-                </select>
-            </div>
-        </div>
     </div>
 
-    <!-- Real Spribe Aviator Audio Source Links -->
+    <!-- Audio Files -->
     <audio id="soundTakeoff" src="https://assets.mixkit.co/active_storage/sfx/2387/2387-preview.mp3" preload="auto"></audio>
     <audio id="soundCashout" src="https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3" preload="auto"></audio>
     <audio id="soundCrash" src="https://assets.mixkit.co/active_storage/sfx/2658/2658-preview.mp3" preload="auto"></audio>
 
-    <script>
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // तुम्हारा नया Firebase Realtime Database URL यहाँ सेट है
+        const firebaseConfig = {
+            databaseURL: "https://aviatorgamepro-aaf06-default-rtdb.asia-southeast1.firebasedatabase.app/"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
         let balance = 1000;
         let currentBet = 0;
         let currentMultiplier = 1.00;
@@ -94,6 +79,16 @@
         let targetCrash = 1.00;
         let flightProgress = 0;
         let hasBetPlacedForNextRound = false;
+        let audioUnlocked = false;
+
+        let adminSettings = { customCrash: "", mode: "smart" };
+
+        // Listen to Admin Control from Firebase Realtime Database
+        onValue(ref(db, 'adminSettings'), (snapshot) => {
+            if (snapshot.exists()) {
+                adminSettings = snapshot.val();
+            }
+        });
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -103,29 +98,21 @@
         const betInput = document.getElementById('betAmount');
         const balanceDisplay = document.getElementById('userBalance');
         const winDisplay = document.getElementById('winAmount');
-        const adminCustomCrash = document.getElementById('adminCustomCrash');
-        const adminMode = document.getElementById('adminMode');
 
-        // Audio Elements
         const sfxTakeoff = document.getElementById('soundTakeoff');
         const sfxCashout = document.getElementById('soundCashout');
         const sfxCrash = document.getElementById('soundCrash');
 
-        function playRealSound(type) {
-            try {
-                if (type === 'start') {
-                    sfxTakeoff.currentTime = 0;
-                    sfxTakeoff.play().catch(e => console.log("Audio block prevented"));
-                } else if (type === 'cashout') {
-                    sfxCashout.currentTime = 0;
-                    sfxCashout.play().catch(e => console.log("Audio block prevented"));
-                } else if (type === 'crash') {
-                    sfxCrash.currentTime = 0;
-                    sfxCrash.play().catch(e => console.log("Audio block prevented"));
-                }
-            } catch (err) {
-                console.log("Sound error:", err);
+        window.unlockAudio = function() {
+            if (!audioUnlocked) {
+                [sfxTakeoff, sfxCashout, sfxCrash].forEach(a => { a.play().then(() => { a.pause(); a.currentTime = 0; }).catch(e => {}); });
+                audioUnlocked = true;
             }
+        }
+
+        function playRealSound(type) {
+            let target = type === 'start' ? sfxTakeoff : (type === 'cashout' ? sfxCashout : sfxCrash);
+            if (target) { target.currentTime = 0; target.play().catch(e => {}); }
         }
 
         function resizeCanvas() {
@@ -137,44 +124,27 @@
 
         function drawScene(progress, multiplier, crashed) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Background Grid Lines
-            ctx.strokeStyle = '#1e293b';
-            ctx.lineWidth = 1;
-            for (let i = 0; i < canvas.width; i += 40) {
-                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
-            }
-            for (let i = 0; i < canvas.height; i += 30) {
-                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
-            }
+            ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+            for (let i = 0; i < canvas.height; i += 30) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
 
             if (isWaiting) {
-                ctx.fillStyle = '#38bdf8';
-                ctx.font = 'bold 15px Arial';
-                ctx.textAlign = 'center';
+                ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center';
                 ctx.fillText("NEXT ROUND IN", canvas.width / 2, canvas.height / 2 - 15);
                 return;
             }
 
-            // Curve Line Path
             let endX = canvas.width * 0.85 * Math.min(progress, 1);
             let endY = canvas.height - (canvas.height * 0.8 * Math.min(progress, 1));
 
-            ctx.beginPath();
-            ctx.moveTo(0, canvas.height);
+            ctx.beginPath(); ctx.moveTo(0, canvas.height);
             ctx.quadraticCurveTo(endX * 0.4, canvas.height - 10, endX, endY);
-            ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 4;
-            ctx.stroke();
+            ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 4; ctx.stroke();
 
-            // Plane Icon or Crash Marker
             if (!crashed) {
-                ctx.font = '26px Arial';
-                ctx.fillText('✈️', endX - 12, endY + 10);
+                ctx.font = '26px Arial'; ctx.fillText('✈️', endX - 12, endY + 10);
             } else {
-                ctx.font = '22px Arial';
-                ctx.fillStyle = '#ef4444';
-                ctx.fillText('💥 FLEW AWAY', endX - 35, endY);
+                ctx.font = '22px Arial'; ctx.fillStyle = '#ef4444'; ctx.fillText('💥 FLEW AWAY', endX - 35, endY);
             }
         }
 
@@ -184,7 +154,6 @@
             isWaiting = true;
             hasBetPlacedForNextRound = false;
             let countdown = 5.0;
-            
             multiplierDisplay.innerText = "5.0s";
             multiplierDisplay.style.color = "#38bdf8";
             gameStatus.innerText = "Place your bets!";
@@ -222,7 +191,7 @@
             targetCrash = calculateCrashPoint();
 
             gameInterval = setInterval(() => {
-                currentMultiplier += 0.02;
+                currentMultiplier += 0.03;
                 flightProgress += 0.015;
 
                 multiplierDisplay.innerText = currentMultiplier.toFixed(2) + 'x';
@@ -240,23 +209,27 @@
         }
 
         function calculateCrashPoint() {
-            let mode = adminMode.value;
-            let customVal = parseFloat(adminCustomCrash.value);
-
+            let customVal = parseFloat(adminSettings.customCrash);
             if (!isNaN(customVal) && customVal >= 1.00) {
-                return customVal;
+                return customVal; // Admin manual override from dashboard
             }
 
+            let mode = adminSettings.mode;
             if (mode === "instant_crash") {
-                return parseFloat((1.00 + Math.random() * 0.03).toFixed(2));
+                return parseFloat((1.00 + Math.random() * 0.05).toFixed(2));
             } else if (mode === "jackpot") {
-                return parseFloat((12.0 + Math.random() * 30.0).toFixed(2));
+                let r = Math.random();
+                if(r < 0.5) return parseFloat((10.0 + Math.random() * 40.0).toFixed(2));
+                return parseFloat((50.0 + Math.random() * 200.0).toFixed(2));
             } else {
+                // Smart House Edge: ज्यादातर बार जल्दी फटेगा, ओनर फायदे में रहेगा
                 let rnd = Math.random();
-                if (rnd < 0.80) {
-                    return parseFloat((1.00 + Math.random() * 0.35).toFixed(2));
+                if (rnd < 0.75) {
+                    return parseFloat((1.00 + Math.random() * 0.45).toFixed(2));
+                } else if(rnd < 0.95) {
+                    return parseFloat((1.50 + Math.random() * 5.00).toFixed(2));
                 } else {
-                    return parseFloat((1.36 + Math.random() * 6.00).toFixed(2));
+                    return parseFloat((6.00 + Math.random() * 50.00).toFixed(2));
                 }
             }
         }
@@ -276,14 +249,11 @@
                 winDisplay.innerText = "0";
             }
 
-            setTimeout(() => {
-                startWaitingCountdown();
-            }, 3500);
+            setTimeout(() => { startWaitingCountdown(); }, 3500);
         }
 
-        function handleUserAction() {
+        window.handleUserAction = function() {
             let bet = parseFloat(betInput.value);
-
             if (isWaiting) {
                 if (hasBetPlacedForNextRound) {
                     balance += currentBet;
@@ -293,7 +263,7 @@
                     actionBtn.className = "";
                 } else {
                     if (isNaN(bet) || bet <= 0 || bet > balance) {
-                        alert("Invalid bet amount or insufficient balance!");
+                        alert("Invalid bet or insufficient balance!");
                         return;
                     }
                     currentBet = bet;
@@ -309,9 +279,7 @@
                     let winnings = Math.floor(currentBet * currentMultiplier);
                     balance += winnings;
                     balanceDisplay.innerText = balance;
-                    
-                    alert(`Successfully Cashed Out! Won ₹${winnings}`);
-                    
+                    alert(`Cashed out successfully! Won ₹${winnings}`);
                     isPlaying = false;
                     actionBtn.innerText = "PLACE BET";
                     actionBtn.className = "";
