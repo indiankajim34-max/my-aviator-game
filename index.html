@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aviator Demo with Admin Panel</title>
+    <style>
+        body { background: #0f172a; color: #fff; font-family: Arial, sans-serif; margin: 0; padding: 10px; text-align: center; }
+        .game-container { background: #1e293b; border-radius: 12px; padding: 15px; max-width: 400px; margin: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .screen { height: 180px; background: #090d16; border-radius: 8px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border: 1px solid #334155; }
+        .multiplier { font-size: 38px; font-weight: bold; color: #facc15; }
+        .status { font-size: 14px; color: #94a3b8; position: absolute; top: 10px; left: 10px; }
+        .controls { margin-top: 15px; display: flex; gap: 10px; }
+        input, button { padding: 10px; font-size: 16px; border-radius: 6px; border: none; }
+        input { flex: 1; background: #334155; color: #fff; text-align: center; }
+        button { background: #22c55e; color: #fff; font-weight: bold; cursor: pointer; flex: 1; }
+        button.cashout { background: #ef4444; }
+        .admin-panel { margin-top: 20px; background: #111827; padding: 12px; border-radius: 8px; border: 1px dashed #ef4444; text-align: left; }
+        .admin-panel h3 { margin: 0 0 10px 0; font-size: 16px; color: #f87171; text-align: center; }
+        .admin-group { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+        .admin-group input, .admin-group select { width: 100px; padding: 5px; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <h2>✈️ Aviator Demo Game</h2>
+        
+        <!-- Game Screen -->
+        <div class="screen">
+            <div class="status" id="gameStatus">Waiting for next round...</div>
+            <div class="multiplier" id="multiplierDisplay">1.00x</div>
+        </div>
+
+        <!-- User Betting Controls -->
+        <div class="controls">
+            <input type="number" id="betAmount" placeholder="Bet (₹)" value="10">
+            <button id="actionBtn" onclick="handleUserAction()">PLACE BET</button>
+        </div>
+        <p id="userBalance" style="margin-top: 10px; font-size: 14px;">Balance: ₹1000</p>
+
+        <!-- Admin Control Panel (Owner Only) -->
+        <div class="admin-panel">
+            <h3>⚙️ Owner / Admin Control</h3>
+            <div class="admin-group">
+                <label>Next Crash Multiplier:</label>
+                <input type="number" id="adminCustomCrash" step="0.1" placeholder="Auto / e.g. 2.0">
+            </div>
+            <div class="admin-group">
+                <label>Rigged Mode:</label>
+                <select id="adminMode">
+                    <option value="smart">Smart House Edge (Normal)</option>
+                    <option value="instant_crash">Instant Crash (1.00x - Owner Wins)</option>
+                    <option value="jackpot">Force 1000x Jackpot</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let balance = 1000;
+        let currentMultiplier = 1.00;
+        let gameInterval = null;
+        let isPlaying = false;
+        let isWaiting = true;
+        let targetCrash = 1.00;
+
+        const multiplierDisplay = document.getElementById('multiplierDisplay');
+        const gameStatus = document.getElementById('gameStatus');
+        const actionBtn = document.getElementById('actionBtn');
+        const betInput = document.getElementById('betAmount');
+        const balanceDisplay = document.getElementById('userBalance');
+        const adminCustomCrash = document.getElementById('adminCustomCrash');
+        const adminMode = document.getElementById('adminMode');
+
+        // Automatic Round Starters
+        setTimeout(startRound, 2000);
+
+        function startRound() {
+            isWaiting = false;
+            gameStatus.innerText = "Plane Flying...";
+            currentMultiplier = 1.00;
+            
+            // Determine Crash Point based on Admin Settings
+            targetCrash = calculateCrashPoint();
+
+            gameInterval = setInterval(() => {
+                currentMultiplier += 0.01;
+                multiplierDisplay.innerText = currentMultiplier.toFixed(2) + 'x';
+
+                if (currentMultiplier >= targetCrash) {
+                    crashGame();
+                }
+            }, 100);
+        }
+
+        function calculateCrashPoint() {
+            let mode = adminMode.value;
+            let customVal = parseFloat(adminCustomCrash.value);
+
+            if (!isNaN(customVal) && customVal >= 1.00) {
+                return customVal; // Admin manual override
+            }
+
+            if (mode === "instant_crash") {
+                return parseFloat((1.00 + Math.random() * 0.05).toFixed(2)); // Fails immediately
+            } else if (mode === "jackpot") {
+                return 1000.00; // Big jackpot mode
+            } else {
+                // Smart House Edge: 80% chance low crash (Owner wins), 20% medium/high
+                let rnd = Math.random();
+                if (rnd < 0.80) {
+                    return parseFloat((1.00 + Math.random() * 0.35).toFixed(2)); // 1.00x to 1.35x
+                } else if (rnd < 0.98) {
+                    return parseFloat((1.36 + Math.random() * 5.00).toFixed(2)); // Medium win
+                } else {
+                    return parseFloat((10.0 + Math.random() * 990.0).toFixed(2)); // Rare high x
+                }
+            }
+        }
+
+        function crashGame() {
+            clearInterval(gameInterval);
+            gameStatus.innerText = "Crashed! @ " + currentMultiplier.toFixed(2) + "x";
+            multiplierDisplay.style.color = "#ef4444";
+            
+            if (isPlaying) {
+                // User didn't cash out in time -> Lost bet
+                isPlaying = false;
+                actionBtn.innerText = "PLACE BET";
+                actionBtn.className = "";
+            }
+
+            // Wait 4 seconds then restart next round
+            setTimeout(() => {
+                multiplierDisplay.style.color = "#facc15";
+                startRound();
+            }, 4000);
+        }
+
+        function handleUserAction() {
+            let bet = parseFloat(betInput.value);
+            if (isWaiting) {
+                alert("Please wait for the round to start!");
+                return;
+            }
+
+            if (!isPlaying) {
+                // Place Bet
+                if (bet > balance || bet <= 0) {
+                    alert("Invalid Balance or Bet Amount!");
+                    return;
+                }
+                balance -= bet;
+                balanceDisplay.innerText = "Balance: ₹" + balance;
+                isPlaying = true;
+                actionBtn.innerText = "CASH OUT";
+                actionBtn.className = "cashout";
+            } else {
+                // Cash Out
+                let winnings = Math.floor(bet * currentMultiplier);
+                balance += winnings;
+                balanceDisplay.innerText = "Balance: ₹" + balance;
+                alert("Cashed out successfully! Won: ₹" + winnings);
+                isPlaying = false;
+                actionBtn.innerText = "PLACE BET";
+                actionBtn.className = "";
+            }
+        }
+    </script>
+</body>
+</html>
