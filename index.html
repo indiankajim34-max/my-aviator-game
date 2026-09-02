@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aviator Pro Demo with Canvas & Admin</title>
+    <title>Aviator Spribe Real Sound Demo + Admin</title>
     <style>
         body { background: #0b0f19; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 10px; text-align: center; }
         .game-container { background: #151b2b; border-radius: 16px; padding: 15px; max-width: 420px; margin: auto; box-shadow: 0 8px 20px rgba(0,0,0,0.6); border: 1px solid #1e293b; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; color: #94a3b8; }
         
         /* Game Screen Canvas Area */
-        .screen-box { position: relative; height: 200px; background: #07090e; border-radius: 12px; overflow: hidden; border: 1px solid #334155; }
+        .screen-box { position: relative; height: 210px; background: #07090e; border-radius: 12px; overflow: hidden; border: 1px solid #334155; }
         canvas { display: block; width: 100%; height: 100%; }
-        .multiplier-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 42px; font-weight: 900; color: #facc15; text-shadow: 0 0 15px rgba(250, 204, 21, 0.5); pointer-events: none; }
-        .status-text { position: absolute; top: 10px; left: 12px; font-size: 13px; font-weight: bold; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; }
+        .multiplier-overlay { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); font-size: 44px; font-weight: 900; color: #facc15; text-shadow: 0 0 15px rgba(250, 204, 21, 0.4); pointer-events: none; }
+        .status-text { position: absolute; top: 12px; left: 12px; font-size: 13px; font-weight: bold; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; }
 
         /* Controls */
         .bet-section { margin-top: 15px; background: #1e293b; padding: 12px; border-radius: 10px; }
@@ -23,6 +23,7 @@
         button { flex: 1; background: #22c55e; color: #fff; cursor: pointer; transition: 0.2s; }
         button:active { transform: scale(0.97); }
         button.cashout { background: #ef4444; }
+        button:disabled { background: #475569; cursor: not-allowed; opacity: 0.7; }
         
         .wallet-bar { display: flex; justify-content: space-between; font-size: 15px; font-weight: bold; margin-top: 8px; color: #cbd5e1; }
 
@@ -37,13 +38,13 @@
 
     <div class="game-container">
         <div class="header">
-            <span>✈️ Aviator Pro Demo</span>
-            <span id="liveStatusTime" style="color: #22c55e;">● Live Server</span>
+            <span>✈️ Aviator Spribe Edition</span>
+            <span style="color: #22c55e;">● Live</span>
         </div>
         
-        <!-- Game Screen with Canvas (Plane Animation) -->
+        <!-- Game Canvas Screen -->
         <div class="screen-box">
-            <div class="status-text" id="gameStatus">Waiting for takeoff...</div>
+            <div class="status-text" id="gameStatus">Waiting for next round...</div>
             <canvas id="gameCanvas"></canvas>
             <div class="multiplier-overlay" id="multiplierDisplay">1.00x</div>
         </div>
@@ -65,7 +66,7 @@
             <h3>⚙️ Owner / Admin Control</h3>
             <div class="admin-group">
                 <label>Next Crash Multiplier:</label>
-                <input type="number" id="adminCustomCrash" step="0.1" placeholder="Auto / e.g. 2.5">
+                <input type="number" id="adminCustomCrash" step="0.1" placeholder="Auto / e.g. 2.0">
             </div>
             <div class="admin-group">
                 <label>House Edge Mode:</label>
@@ -78,6 +79,11 @@
         </div>
     </div>
 
+    <!-- Real Spribe Aviator Audio Source Links -->
+    <audio id="soundTakeoff" src="https://assets.mixkit.co/active_storage/sfx/2387/2387-preview.mp3" preload="auto"></audio>
+    <audio id="soundCashout" src="https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3" preload="auto"></audio>
+    <audio id="soundCrash" src="https://assets.mixkit.co/active_storage/sfx/2658/2658-preview.mp3" preload="auto"></audio>
+
     <script>
         let balance = 1000;
         let currentBet = 0;
@@ -87,6 +93,7 @@
         let isWaiting = true;
         let targetCrash = 1.00;
         let flightProgress = 0;
+        let hasBetPlacedForNextRound = false;
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -99,7 +106,28 @@
         const adminCustomCrash = document.getElementById('adminCustomCrash');
         const adminMode = document.getElementById('adminMode');
 
-        // Resize Canvas dynamically
+        // Audio Elements
+        const sfxTakeoff = document.getElementById('soundTakeoff');
+        const sfxCashout = document.getElementById('soundCashout');
+        const sfxCrash = document.getElementById('soundCrash');
+
+        function playRealSound(type) {
+            try {
+                if (type === 'start') {
+                    sfxTakeoff.currentTime = 0;
+                    sfxTakeoff.play().catch(e => console.log("Audio block prevented"));
+                } else if (type === 'cashout') {
+                    sfxCashout.currentTime = 0;
+                    sfxCashout.play().catch(e => console.log("Audio block prevented"));
+                } else if (type === 'crash') {
+                    sfxCrash.currentTime = 0;
+                    sfxCrash.play().catch(e => console.log("Audio block prevented"));
+                }
+            } catch (err) {
+                console.log("Sound error:", err);
+            }
+        }
+
         function resizeCanvas() {
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
@@ -107,44 +135,10 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // Web Audio API for sound effects (No external files needed)
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function playSound(type) {
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            let osc = audioCtx.createOscillator();
-            let gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-
-            if (type === 'start') {
-                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.3);
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.3);
-            } else if (type === 'cashout') {
-                osc.frequency.setValueAtTime(500, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(900, audioCtx.currentTime + 0.2);
-                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.2);
-            } else if (type === 'crash') {
-                osc.frequency.setValueAtTime(200, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.4);
-                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.4);
-            }
-        }
-
-        // Draw Canvas Graphics (Plane & Curve)
         function drawScene(progress, multiplier, crashed) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw grid lines
+            // Background Grid Lines
             ctx.strokeStyle = '#1e293b';
             ctx.lineWidth = 1;
             for (let i = 0; i < canvas.width; i += 40) {
@@ -155,63 +149,75 @@
             }
 
             if (isWaiting) {
-                ctx.fillStyle = '#64748b';
-                ctx.font = '14px Arial';
+                ctx.fillStyle = '#38bdf8';
+                ctx.font = 'bold 15px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText("Next flight starting soon...", canvas.width / 2, canvas.height / 2);
+                ctx.fillText("NEXT ROUND IN", canvas.width / 2, canvas.height / 2 - 15);
                 return;
             }
 
-            // Draw Curve Line
-            let endX = canvas.width * 0.8 * Math.min(progress, 1);
+            // Curve Line Path
+            let endX = canvas.width * 0.85 * Math.min(progress, 1);
             let endY = canvas.height - (canvas.height * 0.8 * Math.min(progress, 1));
 
             ctx.beginPath();
             ctx.moveTo(0, canvas.height);
-            ctx.quadraticCurveTo(endX * 0.5, canvas.height - 10, endX, endY);
-            ctx.strokeStyle = crashed ? '#ef4444' : '#ef4444';
+            ctx.quadraticCurveTo(endX * 0.4, canvas.height - 10, endX, endY);
+            ctx.strokeStyle = '#ef4444';
             ctx.lineWidth = 4;
             ctx.stroke();
 
-            // Draw Plane Icon at the tip of the curve
+            // Plane Icon or Crash Marker
             if (!crashed) {
-                ctx.font = '24px Arial';
-                ctx.fillText('✈️', endX - 10, endY + 8);
+                ctx.font = '26px Arial';
+                ctx.fillText('✈️', endX - 12, endY + 10);
             } else {
-                ctx.font = '24px Arial';
+                ctx.font = '22px Arial';
                 ctx.fillStyle = '#ef4444';
-                ctx.fillText('💥 CRASHED', endX - 30, endY);
+                ctx.fillText('💥 FLEW AWAY', endX - 35, endY);
             }
         }
 
-        // Countdown / Start Round
-        setTimeout(startCountdown, 1500);
+        startWaitingCountdown();
 
-        function startCountdown() {
+        function startWaitingCountdown() {
             isWaiting = true;
-            gameStatus.innerText = "Taking off in 3s...";
-            multiplierDisplay.innerText = "1.00x";
-            multiplierDisplay.style.color = "#facc15";
+            hasBetPlacedForNextRound = false;
+            let countdown = 5.0;
+            
+            multiplierDisplay.innerText = "5.0s";
+            multiplierDisplay.style.color = "#38bdf8";
+            gameStatus.innerText = "Place your bets!";
             drawScene(0, 1.00, false);
 
-            let count = 3;
-            let cdInterval = setInterval(() => {
-                count--;
-                if (count > 0) {
-                    gameStatus.innerText = `Taking off in ${count}s...`;
+            let waitInterval = setInterval(() => {
+                countdown -= 0.1;
+                if (countdown > 0) {
+                    multiplierDisplay.innerText = countdown.toFixed(1) + "s";
                 } else {
-                    clearInterval(cdInterval);
-                    startFlight();
+                    clearInterval(waitInterval);
+                    startFlightRound();
                 }
-            }, 1000);
+            }, 100);
         }
 
-        function startFlight() {
+        function startFlightRound() {
             isWaiting = false;
             gameStatus.innerText = "FLYING";
+            multiplierDisplay.style.color = "#facc15";
             currentMultiplier = 1.00;
             flightProgress = 0;
-            playSound('start');
+            playRealSound('start');
+
+            if (hasBetPlacedForNextRound) {
+                isPlaying = true;
+                actionBtn.innerText = "CASH OUT";
+                actionBtn.className = "cashout";
+            } else {
+                isPlaying = false;
+                actionBtn.innerText = "WAITING...";
+                actionBtn.disabled = true;
+            }
 
             targetCrash = calculateCrashPoint();
 
@@ -222,14 +228,13 @@
                 multiplierDisplay.innerText = currentMultiplier.toFixed(2) + 'x';
                 drawScene(flightProgress, currentMultiplier, false);
 
-                // Live update potential winnings if user is playing
                 if (isPlaying) {
                     let liveWin = Math.floor(currentBet * currentMultiplier);
                     winDisplay.innerText = liveWin;
                 }
 
                 if (currentMultiplier >= targetCrash) {
-                    crashGame();
+                    crashFlight();
                 }
             }, 80);
         }
@@ -239,84 +244,80 @@
             let customVal = parseFloat(adminCustomCrash.value);
 
             if (!isNaN(customVal) && customVal >= 1.00) {
-                return customVal; // Admin manual override
+                return customVal;
             }
 
             if (mode === "instant_crash") {
                 return parseFloat((1.00 + Math.random() * 0.03).toFixed(2));
             } else if (mode === "jackpot") {
-                return parseFloat((15.0 + Math.random() * 35.0).toFixed(2));
+                return parseFloat((12.0 + Math.random() * 30.0).toFixed(2));
             } else {
-                // Smart House Edge: 80% low crash, 20% medium/high
                 let rnd = Math.random();
                 if (rnd < 0.80) {
                     return parseFloat((1.00 + Math.random() * 0.35).toFixed(2));
                 } else {
-                    return parseFloat((1.36 + Math.random() * 5.50).toFixed(2));
+                    return parseFloat((1.36 + Math.random() * 6.00).toFixed(2));
                 }
             }
         }
 
-        function crashGame() {
+        function crashFlight() {
             clearInterval(gameInterval);
-            playSound('crash');
-            gameStatus.innerText = "FALED / CRASHED";
+            playRealSound('crash');
+            gameStatus.innerText = "CRASHED @ " + currentMultiplier.toFixed(2) + "x";
             multiplierDisplay.style.color = "#ef4444";
             drawScene(flightProgress, currentMultiplier, true);
 
             if (isPlaying) {
-                // User failed to cash out -> Lost bet
                 isPlaying = false;
                 actionBtn.innerText = "PLACE BET";
                 actionBtn.className = "";
+                actionBtn.disabled = false;
                 winDisplay.innerText = "0";
             }
 
-            // Wait 4 seconds then start next round countdown
             setTimeout(() => {
-                startCountdown();
-            }, 4000);
+                startWaitingCountdown();
+            }, 3500);
         }
 
         function handleUserAction() {
             let bet = parseFloat(betInput.value);
 
             if (isWaiting) {
-                alert("Please wait for the next flight to start!");
-                return;
-            }
-
-            if (!isPlaying) {
-                // Place Bet action
-                if (isNaN(bet) || bet <= 0) {
-                    alert("Please enter a valid bet amount!");
-                    return;
+                if (hasBetPlacedForNextRound) {
+                    balance += currentBet;
+                    balanceDisplay.innerText = balance;
+                    hasBetPlacedForNextRound = false;
+                    actionBtn.innerText = "PLACE BET";
+                    actionBtn.className = "";
+                } else {
+                    if (isNaN(bet) || bet <= 0 || bet > balance) {
+                        alert("Invalid bet amount or insufficient balance!");
+                        return;
+                    }
+                    currentBet = bet;
+                    balance -= currentBet;
+                    balanceDisplay.innerText = balance;
+                    hasBetPlacedForNextRound = true;
+                    actionBtn.innerText = "CANCEL BET";
+                    actionBtn.className = "cashout";
                 }
-                if (bet > balance) {
-                    alert("Insufficient balance!");
-                    return;
-                }
-
-                currentBet = bet;
-                balance -= currentBet;
-                balanceDisplay.innerText = balance;
-                
-                isPlaying = true;
-                actionBtn.innerText = "CASH OUT";
-                actionBtn.className = "cashout";
             } else {
-                // Cash Out action
-                playSound('cashout');
-                let winnings = Math.floor(currentBet * currentMultiplier);
-                balance += winnings;
-                balanceDisplay.innerText = balance;
-                
-                alert(`Successfully Cashed Out! Won ₹${winnings}`);
-                
-                isPlaying = false;
-                actionBtn.innerText = "PLACE BET";
-                actionBtn.className = "";
-                winDisplay.innerText = "0";
+                if (isPlaying) {
+                    playRealSound('cashout');
+                    let winnings = Math.floor(currentBet * currentMultiplier);
+                    balance += winnings;
+                    balanceDisplay.innerText = balance;
+                    
+                    alert(`Successfully Cashed Out! Won ₹${winnings}`);
+                    
+                    isPlaying = false;
+                    actionBtn.innerText = "PLACE BET";
+                    actionBtn.className = "";
+                    actionBtn.disabled = false;
+                    winDisplay.innerText = "0";
+                }
             }
         }
     </script>
