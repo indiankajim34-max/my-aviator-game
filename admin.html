@@ -2,68 +2,167 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secret Admin Dashboard - Aviator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aviator Pro - Master Admin Control</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
-        body { background: #090d16; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; text-align: center; }
-        .admin-box { background: #151b2b; border: 1px dashed #ef4444; max-width: 400px; margin: auto; padding: 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
-        h2 { color: #f87171; margin-top: 0; }
-        .form-group { margin-bottom: 15px; text-align: left; }
-        label { display: block; font-size: 14px; color: #94a3b8; margin-bottom: 5px; }
-        input, select { width: 100%; padding: 10px; background: #0f172a; color: #fff; border: 1px solid #334155; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
-        button { width: 100%; padding: 12px; background: #ef4444; color: #fff; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        button:active { transform: scale(0.98); }
-        .status-msg { margin-top: 10px; color: #22c55e; font-size: 14px; font-weight: bold; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0b0e14; color: #fff; padding: 15px; display: flex; flex-direction: column; align-items: center; }
+        .container { max-width: 450px; width: 100%; display: flex; flex-direction: column; gap: 15px; }
+        h2 { color: #ff334b; text-align: center; margin-bottom: 5px; font-size: 20px; }
+        
+        .card { background: #181c24; border: 1px solid #2a2e39; border-radius: 12px; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .card label { font-size: 13px; color: #a0aec0; font-weight: bold; }
+        
+        .status-box { font-size: 16px; font-weight: bold; padding: 10px; text-align: center; border-radius: 8px; background: #212631; }
+        .status-waiting { color: #f1c40f; }
+        .status-flying { color: #00b894; }
+        .status-crashed { color: #ff4757; }
+
+        input[type="number"] { width: 100%; background: #0b0e14; border: 1px solid #2a2e39; border-radius: 8px; color: #fff; padding: 12px; font-size: 18px; text-align: center; outline: none; font-weight: bold; }
+        
+        .btn { width: 100%; padding: 14px; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; text-transform: uppercase; transition: 0.1s; }
+        .btn-primary { background: #00b894; color: white; box-shadow: 0 4px 0 #00886a; }
+        .btn-primary:active { transform: translateY(2px); box-shadow: 0 2px 0 #00886a; }
+        .btn-danger { background: #e17055; color: white; box-shadow: 0 4px 0 #c0392b; }
+        .btn-danger:active { transform: translateY(2px); box-shadow: 0 2px 0 #c0392b; }
+
+        .quick-presets { display: flex; gap: 6px; }
+        .preset-btn { background: #212631; border: 1px solid #2a2e39; color: #fff; flex: 1; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; }
+        .preset-btn:active { background: #374151; }
     </style>
 </head>
 <body>
 
-    <div class="admin-box">
-        <h2>⚙️ Owner Control Panel</h2>
-        <div class="form-group">
-            <label>Force Next Crash Multiplier (Manual Override):</label>
-            <input type="number" id="customCrash" step="0.1" placeholder="e.g. 1.2 or 50.0">
+    <div class="container">
+        <h2>👑 Master Admin Control</h2>
+        
+        <!-- Live Status Card -->
+        <div class="card">
+            <label>Current Game Status</label>
+            <div class="status-box status-waiting" id="adminStatusDisplay">WAITING...</div>
+            <label>Live Multiplier: <span id="adminMultDisplay" style="color:#fff; font-size:18px;">1.00x</span></label>
         </div>
-        <div class="form-group">
-            <label>Select House Edge Mode:</label>
-            <select id="houseMode">
-                <option value="smart">Smart House Edge (Balanced / Owner Wins)</option>
-                <option value="instant_crash">Instant Crash (1.00x - 1.05x)</option>
-                <option value="jackpot">High Jackpot Mode (10x - 200x)</option>
-            </select>
+
+        <!-- Force Crash Control Card -->
+        <div class="card">
+            <label>Force Next Crash Multiplier (Smart Override)</label>
+            <input type="number" id="forcedCrashInput" step="0.1" value="2.00">
+            <div class="quick-presets">
+                <button class="preset-btn" onclick="setPreset(1.2)">1.2x</button>
+                <button class="preset-btn" onclick="setPreset(2.0)">2.0x</button>
+                <button class="preset-btn" onclick="setPreset(5.0)">5.0x</button>
+                <button class="preset-btn" onclick="setPreset(10.0)">10.0x</button>
+            </div>
+            <button class="btn btn-primary" onclick="updateCrashPoint()">Save Crash Multiplier</button>
         </div>
-        <button onclick="updateSettings()">APPLY SETTINGS</button>
-        <div class="status-msg" id="statusMsg"></div>
+
+        <!-- Manual Round Controls -->
+        <div class="card">
+            <label>Manual Round Actions</label>
+            <button class="btn btn-primary" onclick="forceStartRound()">Force Start New Round Now</button>
+            <button class="btn btn-danger" onclick="forceCrashNow()">Force Crash Current Round</button>
+        </div>
     </div>
 
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-        // तुम्हारा नया Firebase Realtime Database URL यहाँ सेट है
+    <script>
+        // Firebase Config
         const firebaseConfig = {
             databaseURL: "https://aviatorgamepro-aaf06-default-rtdb.asia-southeast1.firebasedatabase.app/"
         };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
 
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-
-        window.updateSettings = function() {
-            let crashVal = document.getElementById('customCrash').value;
-            let modeVal = document.getElementById('houseMode').value;
-
-            set(ref(db, 'adminSettings'), {
-                customCrash: crashVal,
-                mode: modeVal
-            }).then(() => {
-                let msg = document.getElementById('statusMsg');
-                msg.innerText = "Settings Updated Successfully!";
-                setTimeout(() => msg.innerText = "", 3000);
-            }).catch((error) => {
-                alert("Error updating: " + error.message);
-            });
+        function setPreset(val) {
+            document.getElementById('forcedCrashInput').value = val;
         }
+
+        function updateCrashPoint() {
+            let val = parseFloat(document.getElementById('forcedCrashInput').value) || 2.00;
+            db.ref('gameState/crashPoint').set(val);
+            alert("Crash multiplier updated successfully to " + val + "x!");
+        }
+
+        function forceStartRound() {
+            db.ref('gameState').update({
+                status: 'FLYING',
+                multiplier: 1.00,
+                startTime: Date.now()
+            });
+            alert("New round forced to start!");
+        }
+
+        function forceCrashNow() {
+            db.ref('gameState').update({
+                status: 'CRASHED'
+            });
+            alert("Current round forced to crash!");
+        }
+
+        // Realtime Game Loop on Admin side to run simulation & sync
+        db.ref('gameState').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const status = data.status || 'WAITING';
+                const mult = data.multiplier || 1.00;
+                
+                const disp = document.getElementById('adminStatusDisplay');
+                disp.innerText = status;
+                document.getElementById('adminMultDisplay.innerText = mult.toFixed(2) + 'x';
+
+                if(status === 'WAITING') {
+                    disp.className = "status-box status-waiting";
+                } else if(status === 'FLYING') {
+                    disp.className = "status-box status-flying";
+                } else {
+                    disp.className = "status-box status-crashed";
+                }
+            }
+        });
+
+        // Master Background Game Loop (Admin controls the server-side timeline clock)
+        setInterval(() => {
+            db.ref('gameState').once('value', (snapshot) => {
+                let data = snapshot.val() || { status: 'WAITING', multiplier: 1.00, crashPoint: 2.00 };
+                
+                if (data.status === 'WAITING') {
+                    // Start countdown simulation to FLYING after 4 seconds
+                    if (!data.waitingTimer) {
+                        setTimeout(() => {
+                            db.ref('gameState').update({
+                                status: 'FLYING',
+                                multiplier: 1.00,
+                                crashPoint: data.crashPoint || 2.00
+                            });
+                        }, 4000);
+                        db.ref('gameState').update({ waitingTimer: true });
+                    }
+                } else if (data.status === 'FLYING') {
+                    let nextMult = data.multiplier + 0.04;
+                    let targetCrash = data.crashPoint || 2.00;
+
+                    if (nextMult >= targetCrash) {
+                        // Crash happens
+                        db.ref('gameState').update({
+                            status: 'CRASHED',
+                            multiplier: targetCrash,
+                            waitingTimer: null
+                        });
+
+                        // Switch to WAITING after 3 seconds showing crash
+                        setTimeout(() => {
+                            db.ref('gameState').update({
+                                status: 'WAITING',
+                                multiplier: 1.00
+                            });
+                        }, 3000);
+                    } else {
+                        db.ref('gameState').update({ multiplier: nextMult });
+                    }
+                }
+            });
+        }, 150);
     </script>
 </body>
 </html>
