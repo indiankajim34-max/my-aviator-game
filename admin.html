@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secret Admin Dashboard - Aviator</title>
+    <style>
+        body { background: #090d16; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; text-align: center; }
+        .admin-box { background: #151b2b; border: 1px dashed #ef4444; max-width: 400px; margin: auto; padding: 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
+        h2 { color: #f87171; margin-top: 0; }
+        .form-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; font-size: 14px; color: #94a3b8; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 10px; background: #0f172a; color: #fff; border: 1px solid #334155; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
+        button { width: 100%; padding: 12px; background: #ef4444; color: #fff; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:active { transform: scale(0.98); }
+        .status-msg { margin-top: 10px; color: #22c55e; font-size: 14px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="admin-box">
+        <h2>⚙️ Owner Control Panel</h2>
+        <div class="form-group">
+            <label>Force Next Crash Multiplier (Manual Override):</label>
+            <input type="number" id="customCrash" step="0.1" placeholder="e.g. 1.2 or 50.0">
+        </div>
+        <div class="form-group">
+            <label>Select House Edge Mode:</label>
+            <select id="houseMode">
+                <option value="smart">Smart House Edge (Balanced / Owner Wins)</option>
+                <option value="instant_crash">Instant Crash (1.00x - 1.05x)</option>
+                <option value="jackpot">High Jackpot Mode (10x - 200x)</option>
+            </select>
+        </div>
+        <button onclick="updateSettings()">APPLY SETTINGS</button>
+        <div class="status-msg" id="statusMsg"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // तुम्हारा नया Firebase Realtime Database URL यहाँ सेट है
+        const firebaseConfig = {
+            databaseURL: "https://aviatorgamepro-aaf06-default-rtdb.asia-southeast1.firebasedatabase.app/"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        window.updateSettings = function() {
+            let crashVal = document.getElementById('customCrash').value;
+            let modeVal = document.getElementById('houseMode').value;
+
+            set(ref(db, 'adminSettings'), {
+                customCrash: crashVal,
+                mode: modeVal
+            }).then(() => {
+                let msg = document.getElementById('statusMsg');
+                msg.innerText = "Settings Updated Successfully!";
+                setTimeout(() => msg.innerText = "", 3000);
+            }).catch((error) => {
+                alert("Error updating: " + error.message);
+            });
+        }
+    </script>
+</body>
+</html>
